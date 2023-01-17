@@ -1,5 +1,7 @@
 package mtk
 
+// Derived from https://github.com/billgraziano/dpapi
+
 import (
 	"encoding/base64"
 	"unsafe"

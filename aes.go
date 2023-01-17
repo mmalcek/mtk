@@ -1,6 +1,6 @@
 package mtk
 
-// https://gist.github.com/enyachoke/5c60f5eebed693d9b4bacddcad693b47
+// Derived from https://gist.github.com/enyachoke/5c60f5eebed693d9b4bacddcad693b47
 
 import (
 	"crypto/aes"
