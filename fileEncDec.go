@@ -19,10 +19,8 @@ import (
 )
 
 type tFileEncrypt struct {
-	publicKey  string
-	inputFile  string
-	outputFile string
-	header     tFileEncryptHeader
+	publicKey string
+	header    tFileEncryptHeader
 }
 
 type tFileEncryptHeader struct {
@@ -31,11 +29,48 @@ type tFileEncryptHeader struct {
 	TimeStamp int64  `json:"t"`
 }
 
-func NewFileEncrypt(publicKey, inputFile, outputFile string) *tFileEncrypt {
-	return &tFileEncrypt{publicKey: publicKey, inputFile: inputFile, outputFile: outputFile}
+func NewFileEncrypt(publicKey string) *tFileEncrypt {
+	return &tFileEncrypt{publicKey: publicKey}
 }
 
-func (c *tFileEncrypt) prepareData() (block cipher.Block, iv []byte, outFile *os.File, err error) {
+// Encrypt file using a public key. File is encrypted in stream using AES. AES key and IV are random generated.
+// AES key and IV are encrypted with public key and stored in the header of the encrypted file.
+func (c *tFileEncrypt) Encrypt(inputFile, outputFile string) error {
+	// Open input file
+	infile, err := os.Open(inputFile)
+	if err != nil {
+		return err
+	}
+	defer infile.Close()
+
+	// Prepare data
+	block, iv, OsOutFile, err := c.prepareData(outputFile)
+	if err != nil {
+		return err
+	}
+	defer OsOutFile.Close()
+
+	// Encrypt file
+	buf := make([]byte, 1024)
+	stream := cipher.NewCTR(block, iv)
+	for {
+		n, err := infile.Read(buf)
+		if n > 0 {
+			stream.XORKeyStream(buf, buf[:n])
+			OsOutFile.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("Read %d bytes: %v", n, err)
+			break
+		}
+	}
+	return nil
+}
+
+func (c *tFileEncrypt) prepareData(outputFile string) (block cipher.Block, iv []byte, outFile *os.File, err error) {
 	// Random 32 byte key for AES encryption
 	aesKey := make([]byte, 32)
 	if _, err := rand.Read(aesKey); err != nil {
@@ -52,23 +87,23 @@ func (c *tFileEncrypt) prepareData() (block cipher.Block, iv []byte, outFile *os
 		return nil, nil, nil, err
 	}
 	// Open output file
-	outfile, err := os.OpenFile(c.outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
 	// Read public key
-	publicKey, err := bytesToPublicKey(c.publicKey)
+	publicKey, err := c.bytesToPublicKey(c.publicKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// Encrypt AES key with public key
-	encryptedAESKey, err := encryptWithPublicKey(aesKey, publicKey)
+	encryptedAESKey, err := c.encryptWithPublicKey(aesKey, publicKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 	// Encrypt IV with public key
-	encryptedIV, err := encryptWithPublicKey(iv, publicKey)
+	encryptedIV, err := c.encryptWithPublicKey(iv, publicKey)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -89,42 +124,14 @@ func (c *tFileEncrypt) prepareData() (block cipher.Block, iv []byte, outFile *os
 	return block, iv, outfile, nil
 }
 
-// Encrypt file using a public key. File is encrypted in stream using AES. AES key and IV are random generated.
-// AES key and IV are encrypted with public key and stored in the header of the encrypted file.
-func (c *tFileEncrypt) Encrypt() error {
-	// Open input file
-	infile, err := os.Open(c.inputFile)
+// Read data from io.Writer and encrypt. Data is encrypted in stream using AES.
+// AES key and IV are random generated. AES key and IV are encrypted with public key and stored in the header of the encrypted file.
+func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error) {
+	// Prepare data
+	block, iv, OsOutfile, err := c.prepareData(outputFile)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer infile.Close()
-
-	// Prepare data
-	block, iv, outfile, err := c.prepareData()
-
-	// Encrypt file
-	buf := make([]byte, 1024)
-	stream := cipher.NewCTR(block, iv)
-	for {
-		n, err := infile.Read(buf)
-		if n > 0 {
-			stream.XORKeyStream(buf, buf[:n])
-			outfile.Write(buf[:n])
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			log.Printf("Read %d bytes: %v", n, err)
-			break
-		}
-	}
-	return nil
-}
-
-func (c *tFileEncrypt) EncryptWriter() (w io.Writer, err error) {
-	// Prepare data
-	block, iv, outfile, err := c.prepareData()
 
 	// read w to buffer
 	r, w := io.Pipe()
@@ -137,7 +144,7 @@ func (c *tFileEncrypt) EncryptWriter() (w io.Writer, err error) {
 			n, err := r.Read(buf)
 			if n > 0 {
 				stream.XORKeyStream(buf, buf[:n])
-				outfile.Write(buf[:n])
+				OsOutfile.Write(buf[:n])
 			}
 			if err == io.EOF {
 				break
@@ -147,13 +154,13 @@ func (c *tFileEncrypt) EncryptWriter() (w io.Writer, err error) {
 				break
 			}
 		}
-		outfile.Close()
+		OsOutfile.Close()
 	}()
 
 	return w, nil
 }
 
-func encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (encryptedBytes []byte, err error) {
+func (c *tFileEncrypt) encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (encryptedBytes []byte, err error) {
 	hash := sha512.New()
 	encryptedBytes, err = rsa.EncryptOAEP(hash, rand.Reader, pub, msg, nil)
 	if err != nil {
@@ -162,7 +169,7 @@ func encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (encryptedBytes []byte
 	return encryptedBytes, nil
 }
 
-func bytesToPublicKey(pubKeyFile string) (publicKey *rsa.PublicKey, err error) {
+func (c *tFileEncrypt) bytesToPublicKey(pubKeyFile string) (publicKey *rsa.PublicKey, err error) {
 	pubKeyBytes, err := os.ReadFile(pubKeyFile)
 	if err != nil {
 		return nil, err
@@ -199,22 +206,22 @@ func (c *tFileEncrypt) Decrypt(inputFile, outputFile, privKeyFile string) error 
 	defer infile.Close()
 
 	// Parse header
-	header, err := parseHeader(infile)
+	header, err := c.parseHeader(infile)
 	if err != nil {
 		return err
 	}
 	// Read private key
-	privateKey, err := BytesToPrivateKey(privKeyFile)
+	privateKey, err := c.bytesToPrivateKey(privKeyFile)
 	if err != nil {
 		return err
 	}
 	// Decrypt AES key
-	decryptedAESKey, err := decryptWithPrivateKey(header.AESKey, privateKey)
+	decryptedAESKey, err := c.decryptWithPrivateKey(header.AESKey, privateKey)
 	if err != nil {
 		return err
 	}
 	// Decrypt IV
-	decryptedIV, err := decryptWithPrivateKey(header.IV, privateKey)
+	decryptedIV, err := c.decryptWithPrivateKey(header.IV, privateKey)
 	if err != nil {
 		return err
 	}
@@ -250,7 +257,7 @@ func (c *tFileEncrypt) Decrypt(inputFile, outputFile, privKeyFile string) error 
 	return nil
 }
 
-func decryptWithPrivateKey(ciphertext []byte, priv *rsa.PrivateKey) (decryptedBytes []byte, err error) {
+func (c *tFileEncrypt) decryptWithPrivateKey(ciphertext []byte, priv *rsa.PrivateKey) (decryptedBytes []byte, err error) {
 	hash := sha512.New()
 	decryptedBytes, err = rsa.DecryptOAEP(hash, rand.Reader, priv, ciphertext, nil)
 	if err != nil {
@@ -259,7 +266,7 @@ func decryptWithPrivateKey(ciphertext []byte, priv *rsa.PrivateKey) (decryptedBy
 	return decryptedBytes, nil
 }
 
-func BytesToPrivateKey(privKeyFile string) (privateKey *rsa.PrivateKey, err error) {
+func (c *tFileEncrypt) bytesToPrivateKey(privKeyFile string) (privateKey *rsa.PrivateKey, err error) {
 	privKeyBytes, err := os.ReadFile(privKeyFile)
 	if err != nil {
 		return nil, err
@@ -281,7 +288,7 @@ func BytesToPrivateKey(privKeyFile string) (privateKey *rsa.PrivateKey, err erro
 	return privateKey, nil
 }
 
-func parseHeader(infile *os.File) (header tFileEncryptHeader, err error) {
+func (c *tFileEncrypt) parseHeader(infile *os.File) (header tFileEncryptHeader, err error) {
 	// Read header
 	marker := make([]byte, 3)
 	if _, err := io.ReadFull(infile, marker); err != nil {

@@ -61,13 +61,15 @@ decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 
 ## TarGz and encrypt with public key
 ```go
-   	fe := mtk.NewFileEncrypt("public.pem", "", "output.tar.gz.sme")
-	encryptWriter, err := fe.EncryptWriter()
+	fe := mtk.NewFileEncrypt("public.pem")
+	tgz := mtk.NewTarGz()
+	encryptReader, err := fe.EncryptReader("test.tar.gz.sme")
 	if err != nil {
 		panic(err)
 	}
-	tg := mtk.NewTarGz()
-	tg.ArchiveWriter([]string{"C:/folder1/data1", "C:/folder2/data3"}, encryptWriter)
+	if err := tgz.ArchiveWriter([]string{"C:/folder1/data1", "C:/folder2/data3"}, encryptReader); err != nil {
+		panic(err)
+	}
 ```
 
 
