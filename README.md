@@ -42,6 +42,17 @@ encrypted, err := mtk.AESencrypt([]byte(text), "myKey")
 decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 ```
 
+## Encrypt file using Private/public keys in stream
+```go
+	fe := mtk.NewFileEncrypt()
+	if err := fe.Encrypt("test.txt", "test.bin", "public.pem"); err != nil {
+		panic(err)
+	}
+	if err := fe.Decrypt("test.bin", "test2.txt", "private.pem"); err != nil {
+		panic(err)
+	}
+```
+
 ## MachineID
 machineID returns the key MachineGuid in registry `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography`. If there is an error running the commad an empty string is returned.
 
