@@ -53,10 +53,18 @@ decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 	}
 ```
 
+## TarGz multiple folders including subfolder
+```go
+    tgz := mtk.NewTarGz()
+	tgz.Archive([]string{"C:/folder1/data1", "C:/folder2/data3"}, "test.tar.gz")
+```
+
 ## MachineID
 machineID returns the key MachineGuid in registry `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography`. If there is an error running the commad an empty string is returned.
 
 ```go
 machineID := mtk.MachineID()
 ```
+
+
 
