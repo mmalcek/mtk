@@ -23,9 +23,9 @@ type tFileEncrypt struct {
 }
 
 type tFileEncryptHeader struct {
-	AESKey    []byte `json:"aes_key"`
-	IV        []byte `json:"iv"`
-	TimeStamp int64  `json:"time_stamp"`
+	AESKey    []byte `json:"k"`
+	IV        []byte `json:"i"`
+	TimeStamp int64  `json:"t"`
 }
 
 func NewFileEncrypt() *tFileEncrypt {
