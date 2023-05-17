@@ -16,7 +16,6 @@ func NewTarGz() *tarGz {
 }
 
 func (t *tarGz) Archive(inPaths []string, outFilePath string) error {
-
 	// file write
 	fw, err := os.Create(outFilePath)
 	if err != nil {
@@ -31,6 +30,25 @@ func (t *tarGz) Archive(inPaths []string, outFilePath string) error {
 	// tar write
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
+
+	for _, inPath := range inPaths {
+		inPath = path.Clean(inPath)
+		if err := t.iterDirectory(inPath, tw); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *tarGz) ArchiveWriter(inPaths []string, writer io.Writer) error {
+	// gzip write
+	gw := gzip.NewWriter(writer)
+	defer gw.Close()
+
+	// tar write
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
 	for _, inPath := range inPaths {
 		inPath = path.Clean(inPath)
 		if err := t.iterDirectory(inPath, tw); err != nil {

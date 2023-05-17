@@ -59,6 +59,18 @@ decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 	tgz.Archive([]string{"C:/folder1/data1", "C:/folder2/data3"}, "test.tar.gz")
 ```
 
+## TarGz and encrypt with public key
+```go
+   	fe := mtk.NewFileEncrypt("public.pem", "", "output.tar.gz.sme")
+	encryptWriter, err := fe.EncryptWriter()
+	if err != nil {
+		panic(err)
+	}
+	tg := mtk.NewTarGz()
+	tg.ArchiveWriter([]string{"C:/folder1/data1", "C:/folder2/data3"}, encryptWriter)
+```
+
+
 ## MachineID
 machineID returns the key MachineGuid in registry `HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Cryptography`. If there is an error running the commad an empty string is returned.
 
