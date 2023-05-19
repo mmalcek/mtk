@@ -63,11 +63,30 @@ decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 ```go
 	fe := mtk.NewFileEncrypt("public.pem")
 	tgz := mtk.NewTarGz()
-	encryptReader, err := fe.EncryptReader("test.tar.gz.sme")
+
+	var done = make(chan bool) // Channel to wait for encryption to finish
+	encryptReader, err := fe.EncryptReader("test.tar.gz.sme", done)
 	if err != nil {
 		panic(err)
 	}
 	if err := tgz.ArchiveWriter([]string{"C:/folder1/data1", "C:/folder2/data3"}, encryptReader); err != nil {
+		panic(err)
+	}
+	<-done // Wait for encryption to finish
+```
+
+## Generate RSA key pair
+```go
+	keys, err := mtk.NewKeyPair(2048)
+	if err != nil {
+		panic(err)
+	}
+	// Private key to file
+	if err := os.WriteFile("private.pem", keys.PrivateKey, 0644); err != nil {
+		panic(err)
+	}
+	// Public key to file
+	if err := os.WriteFile("public.pem", keys.PublicKey, 0644); err != nil {
 		panic(err)
 	}
 ```
