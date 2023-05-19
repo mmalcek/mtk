@@ -86,12 +86,6 @@ func (c *tFileEncrypt) prepareData(outputFile string) (block cipher.Block, iv []
 	if _, err := io.ReadFull(rand.Reader, iv); err != nil {
 		return nil, nil, nil, err
 	}
-	// Open output file
-	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
 	// Read public key
 	publicKey, err := c.bytesToPublicKey(c.publicKey)
 	if err != nil {
@@ -116,6 +110,12 @@ func (c *tFileEncrypt) prepareData(outputFile string) (block cipher.Block, iv []
 	}
 	headerBytes = []byte(base64.StdEncoding.EncodeToString(headerBytes))
 
+	// Open output file
+	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
 	// Write header
 	outfile.Write([]byte("sme"))
 	outfile.Write(headerBytes)
@@ -136,12 +136,15 @@ func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error)
 	// read w to buffer
 	r, w := io.Pipe()
 
-	// read buffer to stdout
+	// Encrypt file
+	buf := make([]byte, 1024)
+	stream := cipher.NewCTR(block, iv)
 	go func() {
-		buf := make([]byte, 1024)
-		stream := cipher.NewCTR(block, iv)
 		for {
 			n, err := r.Read(buf)
+			if string(buf[:n]) == "EndOfFile" {
+				break
+			}
 			if n > 0 {
 				stream.XORKeyStream(buf, buf[:n])
 				OsOutfile.Write(buf[:n])
@@ -155,9 +158,11 @@ func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error)
 			}
 		}
 		OsOutfile.Close()
+		fmt.Println("EncryptReader: EOF")
 	}()
 
 	return w, nil
+
 }
 
 func (c *tFileEncrypt) encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (encryptedBytes []byte, err error) {

@@ -40,14 +40,15 @@ func (t *tarGz) Archive(inPaths []string, outFilePath string) error {
 	return nil
 }
 
-func (t *tarGz) ArchiveWriter(inPaths []string, writer io.Writer) error {
-	// gzip write
-	gw := gzip.NewWriter(writer)
-	defer gw.Close()
-
-	// tar write
+func (t *tarGz) ArchiveWriter(inPaths []string, w io.Writer) error {
+	gw := gzip.NewWriter(w)
 	tw := tar.NewWriter(gw)
-	defer tw.Close()
+
+	defer func() {
+		tw.Close()
+		gw.Close()
+		w.Write([]byte("EndOfFile"))
+	}()
 
 	for _, inPath := range inPaths {
 		inPath = path.Clean(inPath)
