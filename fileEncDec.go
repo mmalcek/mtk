@@ -126,7 +126,7 @@ func (c *tFileEncrypt) prepareData(outputFile string) (block cipher.Block, iv []
 
 // Read data from io.Writer and encrypt. Data is encrypted in stream using AES.
 // AES key and IV are random generated. AES key and IV are encrypted with public key and stored in the header of the encrypted file.
-func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error) {
+func (c *tFileEncrypt) EncryptReader(outputFile string, done chan bool) (w io.Writer, err error) {
 	// Prepare data
 	block, iv, OsOutfile, err := c.prepareData(outputFile)
 	if err != nil {
@@ -140,9 +140,14 @@ func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error)
 	buf := make([]byte, 1024)
 	stream := cipher.NewCTR(block, iv)
 	go func() {
+		defer func() {
+			r.Close()
+			OsOutfile.Close()
+			done <- true // TODO: workaround - find something better, "context" maybe??
+		}()
 		for {
 			n, err := r.Read(buf)
-			if string(buf[:n]) == "EndOfFile" {
+			if string(buf[:n]) == "___EndOfFile___" { // TODO: workaround - find something better
 				break
 			}
 			if n > 0 {
@@ -157,12 +162,9 @@ func (c *tFileEncrypt) EncryptReader(outputFile string) (w io.Writer, err error)
 				break
 			}
 		}
-		OsOutfile.Close()
-		fmt.Println("EncryptReader: EOF")
 	}()
 
 	return w, nil
-
 }
 
 func (c *tFileEncrypt) encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (encryptedBytes []byte, err error) {
