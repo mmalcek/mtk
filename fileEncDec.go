@@ -87,7 +87,7 @@ func (c *tFileEncrypt) prepareData(outputFile string) (block cipher.Block, iv []
 		return nil, nil, nil, err
 	}
 	// Open output file
-	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -232,7 +232,7 @@ func (c *tFileEncrypt) Decrypt(inputFile, outputFile, privKeyFile string) error 
 		log.Panic(err)
 	}
 	// Open output file
-	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
