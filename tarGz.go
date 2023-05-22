@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 )
@@ -31,9 +32,14 @@ func (t *tarGz) Archive(inPaths []string, outFilePath string) error {
 	tw := tar.NewWriter(gw)
 	defer tw.Close()
 
-	for _, inPath := range inPaths {
-		inPath = path.Clean(inPath)
-		if err := t.iterDirectory(inPath, tw); err != nil {
+	for i := range inPaths {
+		inPaths[i] = path.Clean(inPaths[i])
+		// If path does not exists - log error and continue
+		if _, err := os.Stat(inPaths[i]); os.IsNotExist(err) {
+			log.Printf("ERROR-pathNotExists: %s\n", inPaths[i])
+			continue
+		}
+		if err := t.iterDirectory(inPaths[i], tw); err != nil {
 			return err
 		}
 	}
