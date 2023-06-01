@@ -19,105 +19,67 @@ import (
 	"time"
 )
 
-type tFileEncrypt struct {
-	publicKey string
-	header    tFileEncryptHeader
-	block     cipher.Block
-	iv        []byte
-	file      *os.File
-	FileName  string
-	stream    cipher.Stream
-}
+type (
+	tFileEncrypt struct {
+		publicKey  *string
+		privateKey *string
+		header     tFileEncryptHeader
+		block      cipher.Block
+		iv         []byte
+		outFile    *os.File
+		inFile     *os.File
+		stream     cipher.Stream
+	}
 
-type tFileEncryptHeader struct {
-	AESKey    []byte `json:"k"`
-	IV        []byte `json:"i"`
-	TimeStamp int64  `json:"t"`
-}
+	tFileEncryptHeader struct {
+		AESKey    []byte `json:"k"`
+		IV        []byte `json:"i"`
+		TimeStamp int64  `json:"t"`
+	}
+)
 
 // Prepare data for encryption. Generate AES key and IV, encrypt them with public key and write to the header of the file.
 // *tFileEncrypt can be used as io.Writer to write encrypted data to the file.
-func NewFileEncrypt(publicKey, outputFile string) (fe *tFileEncrypt, err error) {
-	f := &tFileEncrypt{publicKey: publicKey, FileName: outputFile}
-	if err = f.prepareData(); err != nil {
+func FileEncrypt(publicKey, outputFile string) (fe *tFileEncrypt, err error) {
+	// Open output file
+	outFile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		return nil, err
+	}
+	f := &tFileEncrypt{publicKey: &publicKey, outFile: outFile}
+	if err = f.prepareEncrypt(); err != nil {
 		return nil, err
 	}
 	return f, nil
 }
 
-func (c *tFileEncrypt) Write(p []byte) (n int, err error) {
-	buf := make([]byte, 1024)
-	r := bytes.NewReader(p)
-	for {
-		n, err := r.Read(buf)
-		if n > 0 {
-			c.stream.XORKeyStream(buf, buf[:n])
-			c.file.Write(buf[:n])
-		}
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return 0, fmt.Errorf("errorReading: %s", err.Error())
-		}
-	}
-	return len(p), nil
-}
+func FileDecrypt(inputFile, outputFile, privateKey string) (err error) {
+	fe := &tFileEncrypt{privateKey: &privateKey}
 
-func (c *tFileEncrypt) Close() error {
-	return c.file.Close()
-}
+	fe.inFile, err = os.Open(inputFile)
+	if err != nil {
+		return err
+	}
+	defer fe.inFile.Close()
 
-// Decrypt file using a private key. File is decrypted in stream using AES.
-// AES key and IV are read from the header of the encrypted file and decrypted with the private key.
-func (c *tFileEncrypt) Decrypt(inputFile, outputFile, privKeyFile string) error {
-	// Open input file
-	infile, err := os.Open(inputFile)
-	if err != nil {
-		return err
-	}
-	defer infile.Close()
-
-	// Parse header
-	header, err := c.parseHeader(infile)
-	if err != nil {
-		return err
-	}
-	// Read private key
-	privateKey, err := c.bytesToPrivateKey(privKeyFile)
-	if err != nil {
-		return err
-	}
-	// Decrypt AES key
-	decryptedAESKey, err := c.decryptWithPrivateKey(header.AESKey, privateKey)
-	if err != nil {
-		return err
-	}
-	// Decrypt IV
-	decryptedIV, err := c.decryptWithPrivateKey(header.IV, privateKey)
-	if err != nil {
-		return err
+	if err = fe.prepareDecrypt(); err != nil {
+		return errors.New("prepareDecrypt: " + err.Error())
 	}
 
-	// Prepare AES block cipher
-	block, err := aes.NewCipher(decryptedAESKey)
-	if err != nil {
-		log.Panic(err)
-	}
 	// Open output file
-	outfile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
+	outFile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer outfile.Close()
+	defer outFile.Close()
 	// Decrypt file and write to output file
 	buf := make([]byte, 1024)
-	stream := cipher.NewCTR(block, decryptedIV)
+	stream := cipher.NewCTR(fe.block, fe.iv)
 	for {
-		n, err := infile.Read(buf)
+		n, err := fe.inFile.Read(buf)
 		if n > 0 {
 			stream.XORKeyStream(buf, buf[:n])
-			outfile.Write(buf[:n])
+			outFile.Write(buf[:n])
 		}
 		if err == io.EOF {
 			break
@@ -130,7 +92,64 @@ func (c *tFileEncrypt) Decrypt(inputFile, outputFile, privKeyFile string) error 
 	return nil
 }
 
-func (c *tFileEncrypt) prepareData() (err error) {
+func (c *tFileEncrypt) Write(p []byte) (n int, err error) {
+	buf := make([]byte, 1024)
+	r := bytes.NewReader(p)
+	for {
+		n, err := r.Read(buf)
+		if n > 0 {
+			c.stream.XORKeyStream(buf, buf[:n])
+			c.outFile.Write(buf[:n])
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return 0, fmt.Errorf("errorReading: %s", err.Error())
+		}
+	}
+	return len(p), nil
+}
+
+func (c *tFileEncrypt) Close() error {
+	return c.outFile.Close()
+}
+
+// Decrypt file using a private key. File is decrypted in stream using AES.
+// AES key and IV are read from the header of the encrypted file and decrypted with the private key.
+func (c *tFileEncrypt) prepareDecrypt() error {
+	// Parse header
+	header, err := c.parseHeader(c.inFile)
+	if err != nil {
+		return err
+	}
+
+	// Read private key
+	privateKey, err := c.bytesToPrivateKey(*c.privateKey)
+	if err != nil {
+		return err
+	}
+	// Decrypt AES key
+	decryptedAESKey, err := c.decryptWithPrivateKey(header.AESKey, privateKey)
+	if err != nil {
+		return err
+	}
+	fmt.Println("PK: ", decryptedAESKey)
+	// Decrypt IV
+	c.iv, err = c.decryptWithPrivateKey(header.IV, privateKey)
+	if err != nil {
+		return err
+	}
+	// Prepare AES block cipher
+	c.block, err = aes.NewCipher(decryptedAESKey)
+	if err != nil {
+		log.Panic(err)
+	}
+
+	return nil
+}
+
+func (c *tFileEncrypt) prepareEncrypt() (err error) {
 	// Random 32 byte key for AES encryption
 	aesKey := make([]byte, 32)
 	if _, err := rand.Read(aesKey); err != nil {
@@ -148,7 +167,7 @@ func (c *tFileEncrypt) prepareData() (err error) {
 	}
 	c.stream = cipher.NewCTR(c.block, c.iv)
 	// Read public key
-	publicKey, err := c.bytesToPublicKey(c.publicKey)
+	publicKey, err := c.bytesToPublicKey(*c.publicKey)
 	if err != nil {
 		return err
 	}
@@ -169,15 +188,11 @@ func (c *tFileEncrypt) prepareData() (err error) {
 		return err
 	}
 	headerBytes = []byte(base64.StdEncoding.EncodeToString(headerBytes))
-	// Open output file
-	c.file, err = os.OpenFile(c.FileName, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
-	if err != nil {
-		return err
-	}
+
 	// Write header
-	c.file.Write([]byte("sme"))
-	c.file.Write(headerBytes)
-	c.file.Write([]byte{0})
+	c.outFile.Write([]byte("sme"))
+	c.outFile.Write(headerBytes)
+	c.outFile.Write([]byte{0})
 	return nil
 }
 
