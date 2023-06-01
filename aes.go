@@ -66,8 +66,8 @@ func AESdecrypt(encodedCipher, passphrase string) ([]byte, error) {
 
 func deriveKey(passphrase string, salt []byte) ([]byte, []byte) {
 	if salt == nil {
-		salt = make([]byte, 8)
+		salt = make([]byte, 64)
 		rand.Read(salt)
 	}
-	return pbkdf2.Key([]byte(passphrase), salt, 1000, 32, sha256.New), salt
+	return pbkdf2.Key([]byte(passphrase), salt, 821323, 32, sha256.New), salt
 }

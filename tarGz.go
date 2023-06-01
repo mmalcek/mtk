@@ -53,7 +53,6 @@ func (t *tarGz) ArchiveWriter(inPaths []string, ew io.Writer) error {
 	defer func() {
 		tw.Close()
 		gw.Close()
-		ew.Write([]byte("___EndOfFile___")) // TODO: workaround - find something better
 	}()
 
 	for i := range inPaths {
