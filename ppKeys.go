@@ -13,22 +13,23 @@ type KeyPair struct {
 }
 
 // NewKeyPair creates a new RSA key pair of the given bit size
-// BitSizes between 2048=RSA2048, 3072=RSA3072, 4096=RSA4096
-func NewKeyPair(bits int) (keyPair *KeyPair, err error) {
+// BitSizes 2048=RSA2048, 3072=RSA3072, 4096=RSA4096
+// Password is optional - if empty, no password will be used
+func NewKeyPair(bits int, password string) (keyPair *KeyPair, err error) {
 	kp := &KeyPair{}
-	if err = kp.generate(bits); err != nil {
+	if err = kp.generate(bits, password); err != nil {
 		return nil, err
 	}
 	return kp, nil
 }
 
 // Generate private and public key pair
-func (kp *KeyPair) generate(bits int) (err error) {
+func (kp *KeyPair) generate(bits int, password string) (err error) {
 	privkey, err := rsa.GenerateKey(rand.Reader, bits)
 	if err != nil {
 		return err
 	}
-	if kp.PrivateKey, err = kp.privateKeyToBytes(privkey); err != nil {
+	if kp.PrivateKey, err = kp.privateKeyToBytes(privkey, password); err != nil {
 		return err
 	}
 	if kp.PublicKey, err = kp.publicKeyToBytes(&privkey.PublicKey); err != nil {
@@ -37,14 +38,18 @@ func (kp *KeyPair) generate(bits int) (err error) {
 	return nil
 }
 
-func (kp *KeyPair) privateKeyToBytes(priv *rsa.PrivateKey) (privateKey []byte, err error) {
-	privBytes := pem.EncodeToMemory(
-		&pem.Block{
-			Type:  "RSA PRIVATE KEY",
-			Bytes: x509.MarshalPKCS1PrivateKey(priv),
-		},
-	)
-	return privBytes, nil
+func (kp *KeyPair) privateKeyToBytes(priv *rsa.PrivateKey, password string) (privateKey []byte, err error) {
+	block := &pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	}
+	if password != "" {
+		block, err = x509.EncryptPEMBlock(rand.Reader, block.Type, block.Bytes, []byte(password), x509.PEMCipherAES256)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return pem.EncodeToMemory(block), nil
 }
 
 func (kp *KeyPair) publicKeyToBytes(pub *rsa.PublicKey) (publicKey []byte, err error) {
@@ -56,6 +61,5 @@ func (kp *KeyPair) publicKeyToBytes(pub *rsa.PublicKey) (publicKey []byte, err e
 		Type:  "RSA PUBLIC KEY",
 		Bytes: pubASN1,
 	})
-
 	return pubBytes, nil
 }
