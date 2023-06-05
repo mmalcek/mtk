@@ -22,7 +22,7 @@ import (
 type (
 	tFileEncrypt struct {
 		publicKey  *string
-		privateKey *string
+		privateKey *[]byte
 		header     tFileEncryptHeader
 		block      cipher.Block
 		iv         []byte
@@ -53,7 +53,7 @@ func FileEncrypt(publicKey, outputFile string) (fe *tFileEncrypt, err error) {
 	return f, nil
 }
 
-func FileDecrypt(inputFile, outputFile, privateKey string) (err error) {
+func FileDecrypt(inputFile, outputFile string, privateKey, password []byte) (err error) {
 	fe := &tFileEncrypt{privateKey: &privateKey}
 
 	fe.inFile, err = os.Open(inputFile)
@@ -62,7 +62,7 @@ func FileDecrypt(inputFile, outputFile, privateKey string) (err error) {
 	}
 	defer fe.inFile.Close()
 
-	if err = fe.prepareDecrypt(); err != nil {
+	if err = fe.prepareDecrypt(password); err != nil {
 		return errors.New("prepareDecrypt: " + err.Error())
 	}
 
@@ -117,7 +117,7 @@ func (c *tFileEncrypt) Close() error {
 
 // Decrypt file using a private key. File is decrypted in stream using AES.
 // AES key and IV are read from the header of the encrypted file and decrypted with the private key.
-func (c *tFileEncrypt) prepareDecrypt() error {
+func (c *tFileEncrypt) prepareDecrypt(password []byte) error {
 	// Parse header
 	header, err := c.parseHeader(c.inFile)
 	if err != nil {
@@ -125,7 +125,7 @@ func (c *tFileEncrypt) prepareDecrypt() error {
 	}
 
 	// Read private key
-	privateKey, err := c.bytesToPrivateKey(*c.privateKey)
+	privateKey, err := c.bytesToPrivateKey(*c.privateKey, password)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,6 @@ func (c *tFileEncrypt) prepareDecrypt() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("PK: ", decryptedAESKey)
 	// Decrypt IV
 	c.iv, err = c.decryptWithPrivateKey(header.IV, privateKey)
 	if err != nil {
@@ -299,7 +298,6 @@ func (c *tFileEncrypt) bytesToPublicKey(pubKeyFile string) (publicKey *rsa.Publi
 	enc := x509.IsEncryptedPEMBlock(block)
 	b := block.Bytes
 	if enc {
-		log.Println("is encrypted pem block")
 		b, err = x509.DecryptPEMBlock(block, nil)
 		if err != nil {
 			return nil, err
@@ -325,17 +323,12 @@ func (c *tFileEncrypt) decryptWithPrivateKey(ciphertext []byte, priv *rsa.Privat
 	return decryptedBytes, nil
 }
 
-func (c *tFileEncrypt) bytesToPrivateKey(privKeyFile string) (privateKey *rsa.PrivateKey, err error) {
-	privKeyBytes, err := os.ReadFile(privKeyFile)
-	if err != nil {
-		return nil, err
-	}
+func (c *tFileEncrypt) bytesToPrivateKey(privKeyBytes []byte, password []byte) (privateKey *rsa.PrivateKey, err error) {
 	block, _ := pem.Decode(privKeyBytes)
 	enc := x509.IsEncryptedPEMBlock(block)
 	b := block.Bytes
 	if enc {
-		log.Println("is encrypted pem block")
-		b, err = x509.DecryptPEMBlock(block, nil)
+		b, err = x509.DecryptPEMBlock(block, password)
 		if err != nil {
 			return nil, err
 		}
