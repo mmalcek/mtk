@@ -44,11 +44,11 @@ decrypted, err :=  mtk.AESdecrypt(encrypted, "myKey")
 
 ## Encrypt file using Private/public keys in stream
 ```go
-	fe := mtk.NewFileEncrypt()
-	if err := fe.Encrypt("test.txt", "test.bin", "public.pem"); err != nil {
+	fe, err := mtk.FileEncrypt("publicKey", "outputFile") // returns io.Writer
+	if err != nil {
 		panic(err)
 	}
-	if err := fe.Decrypt("test.bin", "test2.txt", "private.pem"); err != nil {
+	if err := fe.Decrypt("input.sme", "output.txt", "private.pem", []byte("Password")); err != nil {
 		panic(err)
 	}
 ```
