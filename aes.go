@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"fmt"
 	"strings"
 
 	"golang.org/x/crypto/pbkdf2"
@@ -36,6 +37,9 @@ func AESdecrypt(encodedCipher, passphrase string) ([]byte, error) {
 		return nil, err
 	}
 	arr := strings.Split(string(ciphertext), ".")
+	if len(arr) != 3 {
+		return nil, fmt.Errorf("invalidCipherText")
+	}
 	salt, err := hex.DecodeString(arr[0])
 	if err != nil {
 		return nil, err
