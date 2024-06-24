@@ -21,7 +21,7 @@ import (
 
 type (
 	tFileEncrypt struct {
-		publicKey  *string
+		publicKey  *[]byte
 		privateKey *[]byte
 		header     tFileEncryptHeader
 		block      cipher.Block
@@ -40,7 +40,7 @@ type (
 
 // Prepare data for encryption. Generate AES key and IV, encrypt them with public key and write to the header of the file.
 // *tFileEncrypt can be used as io.Writer to write encrypted data to the file.
-func FileEncrypt(publicKey, outputFile string) (fe *tFileEncrypt, err error) {
+func FileEncrypt(publicKey []byte, outputFile string) (fe *tFileEncrypt, err error) {
 	// Open output file
 	outFile, err := os.OpenFile(outputFile, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
@@ -289,12 +289,8 @@ func (c *tFileEncrypt) encryptWithPublicKey(msg []byte, pub *rsa.PublicKey) (enc
 	return encryptedBytes, nil
 }
 
-func (c *tFileEncrypt) bytesToPublicKey(pubKeyFile string) (publicKey *rsa.PublicKey, err error) {
-	pubKeyBytes, err := os.ReadFile(pubKeyFile)
-	if err != nil {
-		return nil, err
-	}
-	block, _ := pem.Decode(pubKeyBytes)
+func (c *tFileEncrypt) bytesToPublicKey(pubKey []byte) (publicKey *rsa.PublicKey, err error) {
+	block, _ := pem.Decode(pubKey)
 	enc := x509.IsEncryptedPEMBlock(block)
 	b := block.Bytes
 	if enc {
