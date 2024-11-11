@@ -3,12 +3,13 @@ package mtk
 import (
 	"archive/tar"
 	"compress/gzip"
+	"path/filepath"
+
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path"
-	"strings"
 )
 
 type tarGz struct{}
@@ -57,8 +58,8 @@ func (t *tarGz) ArchiveWriter(inPaths []string, ew io.Writer) error {
 	}()
 
 	for i := range inPaths {
-		inPaths[i] = path.Clean(inPaths[i])
-		inPaths[i] = strings.ReplaceAll(inPaths[i], "\\", "/")
+		// inPaths[i] = path.Clean(inPaths[i])
+		// inPaths[i] = strings.ReplaceAll(inPaths[i], "\\", "/")
 		// If path does not exists - log error and continue
 		if _, err := os.Stat(inPaths[i]); os.IsNotExist(err) {
 			log.Printf("ERROR-pathNotExists: %s\n", inPaths[i])
@@ -84,7 +85,7 @@ func (t *tarGz) iterDirectory(dirPath string, tw *tar.Writer) error {
 	}
 
 	for _, fi := range fis {
-		curPath := dirPath + "/" + fi.Name()
+		curPath := filepath.Join(dirPath, fi.Name())
 		if fi.IsDir() {
 			t.iterDirectory(curPath, tw)
 		} else {
