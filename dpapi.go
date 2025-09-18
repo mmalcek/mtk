@@ -1,3 +1,5 @@
+//go:build windows
+
 package mtk
 
 // Derived from https://github.com/billgraziano/dpapi

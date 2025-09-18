@@ -1,3 +1,5 @@
+//go:build windows
+
 package mtk
 
 import "golang.org/x/sys/windows/registry"
